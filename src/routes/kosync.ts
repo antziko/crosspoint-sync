@@ -11,7 +11,7 @@ import {
   type AppEnv,
 } from '../auth/middleware.js';
 import { hashKey, looksLikeMd5, md5Hex } from '../auth/password.js';
-import { parsePosition } from '../models/position.js';
+import { parsePosition, type RichPosition } from '../models/position.js';
 import { resolveDocument } from '../models/merge.js';
 import { nowSeconds } from '../models/sync.js';
 import { nextChangeSeq } from '../models/changes.js';
@@ -351,6 +351,23 @@ export function fanOutDeviceProgress(db: DB, record: ProgressUpsert): void {
   fanOutProgress(db, record.userId, record.document, record.percentage, record.updatedAt, record.progress, record.position);
 }
 
+/**
+ * The stored rich position, if it still describes the stored percentage. A write
+ * without a position keeps the previous one (see upsertProgress), which must not
+ * be handed back next to a newer percentage.
+ */
+function currentPosition(position: string | null, percentage: number): { position: RichPosition } | null {
+  if (!position) return null;
+  let parsed: RichPosition | null;
+  try {
+    parsed = parsePosition(JSON.parse(position));
+  } catch {
+    return null;
+  }
+  if (!parsed || Math.abs(parsed.pctQ / 1_000_000 - percentage) > 0.0001) return null;
+  return { position: parsed };
+}
+
 export function kosyncRoutes(db: DB, config: Config, refreshProgress: ProgressRefresh = async () => {}): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
   const auth = authMiddleware(db);
@@ -433,7 +450,7 @@ export function kosyncRoutes(db: DB, config: Config, refreshProgress: ProgressRe
     autoPause(db, { userId: user.id, document: canonical });
     const row = db
       .prepare(
-        `SELECT document, progress, percentage, device, device_id, updated_at
+        `SELECT document, progress, percentage, device, device_id, position, updated_at
          FROM progress WHERE user_id = ? AND document = ?
          ORDER BY updated_at DESC, device_id LIMIT 1`
       )
@@ -444,6 +461,7 @@ export function kosyncRoutes(db: DB, config: Config, refreshProgress: ProgressRe
           percentage: number;
           device: string;
           device_id: string;
+          position: string | null;
           updated_at: number;
         }
       | undefined;
@@ -458,6 +476,8 @@ export function kosyncRoutes(db: DB, config: Config, refreshProgress: ProgressRe
       device: row.device,
       device_id: row.device_id,
       timestamp: row.updated_at,
+      // CrossPoint superset: the rich position, when it belongs to this write.
+      ...(currentPosition(row.position, row.percentage) ?? {}),
     });
   });
 

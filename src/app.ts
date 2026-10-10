@@ -17,6 +17,7 @@ import { documentRoutes } from './routes/v1/documents.js';
 import { connectorRoutes, oauthCallbackRoutes } from './routes/v1/connectors.js';
 import { kindleRegisterRoutes } from './routes/v1/kindle-register.js';
 import { createProgressRefresh } from './connectors/refresh.js';
+import { compatRoutes } from './compat/routes.js';
 import type { HttpTransport } from './connectors/types.js';
 
 // Injected at build time via package.json; read lazily to keep this file dependency-free.
@@ -71,6 +72,8 @@ export function createApp(db: DB, config: Config, opts: AppOptions = {}): Hono<A
   // kosync-compatible API at the root - stock KOReader and current CrossPoint
   // firmware work by changing only the server URL.
   app.route('/', kosyncRoutes(db, config, refreshProgress));
+  // Fork-only: the koreader-sync-server bookmarks/stats extension.
+  app.route('/', compatRoutes(db));
 
   // Web account session auth (browser signup/login) + kosync link management.
   app.route('/auth', authRoutes(db, config));
