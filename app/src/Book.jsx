@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, CalendarDays, Hash, MoreHorizontal, Split, Trash2, Image as ImageIcon, Loader2, Merge, Quote, Search, Share2, Star, X } from 'lucide-react'
 import { api, isApp } from './api.js'
 import { renderCard } from './shareCard.js'
+import { deviceLabel } from './deviceLabel.js'
 import { isPace, moodEmoji } from './moods.js'
 import ShareSheet from './ShareSheet.jsx'
 import SpotifyCard from './SpotifyCard.jsx'
@@ -13,12 +14,6 @@ const date = (unix, opts) =>
 // CrossInk stats dates are calendar dates sent as UTC midnight: show them in UTC so they don't slip a day.
 const calendarDate = (unix) => date(unix, { timeZone: 'UTC' })
 
-// The device that synced last: its name plus the end of its id, which tells same-named readers
-// apart (every CrossPoint reader reports "CrossPoint"; the id is per device).
-function deviceLabel(b) {
-  const id = (b.device_id || '').replace(/^crosspoint-/, '')
-  return [b.device, id && `#${id.slice(-6)}`].filter(Boolean).join(' ')
-}
 
 function StatusPicker({ session, book, onChange }) {
   const [busy, setBusy] = useState(null)
