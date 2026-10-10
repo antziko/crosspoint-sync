@@ -184,6 +184,27 @@ describe('koreader-sync-server compat', () => {
     expect(got.position).toBeUndefined();
     expect(got.percentage).toBe(0.4);
   });
+
+  it('asks for metadata until the document has a title or filename', async () => {
+    const { app } = makeTestApp();
+    const { headers } = await registerUser(app);
+    const put = (metadata?: Record<string, string>) =>
+      app.request('/syncs/progress', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ document: DOC, progress: '/body/p[1]', percentage: 0.3, device: 'CrossPoint', device_id: 'cp-1', metadata }),
+      });
+    const get = async (offer = true) =>
+      (await (
+        await app.request(`/syncs/progress/${DOC}`, { headers: offer ? { ...headers, 'x-crosspoint-metadata': '1' } : headers })
+      ).json()) as Record<string, unknown>;
+
+    await put();
+    expect((await get(false)).metadata_wanted).toBeUndefined();
+    expect((await get()).metadata_wanted).toBe(true);
+    await put({ title: 'A Tale of Two Cities', filename: 'tale.epub' });
+    expect((await get()).metadata_wanted).toBeUndefined();
+  });
 });
 
 describe('koreader-sync-server Redis import', () => {

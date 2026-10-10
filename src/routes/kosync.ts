@@ -469,7 +469,19 @@ export function kosyncRoutes(db: DB, config: Config, refreshProgress: ProgressRe
       // Stock kosync returns 200 with an empty object; KOReader clients rely on it.
       return c.json({});
     }
+    // Progress imported from a plain kosync server has no title, so the app hides the book.
+    // A reader that offers metadata (x-crosspoint-metadata: 1) is asked to re-push it once,
+    // even when it finds itself in sync. Other clients get the stock kosync body.
+    const metadataWanted =
+      c.req.header('x-crosspoint-metadata') === '1' &&
+      !db
+        .prepare(
+          `SELECT 1 FROM documents WHERE user_id = ? AND document = ?
+             AND (COALESCE(title, '') <> '' OR COALESCE(filename, '') <> '')`
+        )
+        .get(user.id, canonical);
     return c.json({
+      ...(metadataWanted ? { metadata_wanted: true } : {}),
       document, // the hash the client asked about, not the canonical one
       progress: row.progress,
       percentage: row.percentage,
