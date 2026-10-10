@@ -57,6 +57,23 @@ export interface DocumentMetadata {
 // ("bookfusion_id" -> connector "bookfusion"). Reserved keys are not ids.
 const RESERVED_META_KEYS = new Set(['filename', 'title', 'authors', 'source']);
 
+/**
+ * Drops the CrossPoint optimizer's "(X3)"/"(X4)" copy tag from a title or filename, so every
+ * copy of a book shows one name. Mirrors the reader's sync-key rule (KOReaderDocumentId.h):
+ * at the start, at the end (before the extension), or at the start of the part after " - ".
+ */
+export function stripDeviceTag(name: string | null): string | null {
+  if (!name) return name;
+  const dot = name.lastIndexOf('.');
+  const ext = dot > 0 && /^\.[A-Za-z0-9]{1,5}$/.test(name.slice(dot)) ? name.slice(dot) : '';
+  const stem = name
+    .slice(0, name.length - ext.length)
+    .replace(/^\(x[34]\) /i, '')
+    .replace(/ \(x[34]\)$/i, '')
+    .replace(/ - \(x[34]\) /gi, ' - ');
+  return stem ? stem + ext : name;
+}
+
 function parseMetadata(raw: unknown): DocumentMetadata | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const o = raw as Record<string, unknown>;
@@ -69,8 +86,8 @@ function parseMetadata(raw: unknown): DocumentMetadata | null {
     if (m && id) externalIds[m[1]] = id;
   }
   const meta: DocumentMetadata = {
-    filename: str(o.filename),
-    title: str(o.title),
+    filename: stripDeviceTag(str(o.filename)),
+    title: stripDeviceTag(str(o.title)),
     authors: str(o.authors),
     externalIds,
   };

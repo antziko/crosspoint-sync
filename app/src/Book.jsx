@@ -13,6 +13,13 @@ const date = (unix, opts) =>
 // CrossInk stats dates are calendar dates sent as UTC midnight: show them in UTC so they don't slip a day.
 const calendarDate = (unix) => date(unix, { timeZone: 'UTC' })
 
+// The device that synced last: its name plus the end of its id, which tells same-named readers
+// apart (every CrossPoint reader reports "CrossPoint"; the id is per device).
+function deviceLabel(b) {
+  const id = (b.device_id || '').replace(/^crosspoint-/, '')
+  return [b.device, id && `#${id.slice(-6)}`].filter(Boolean).join(' ')
+}
+
 function StatusPicker({ session, book, onChange }) {
   const [busy, setBusy] = useState(null)
   async function pick(id) {
@@ -372,7 +379,7 @@ function MergePicker({ session, book, books, onDone, onClose }) {
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-stone-900">{b.title || b.filename}</p>
               <p className="truncate text-xs text-stone-500">
-                {[b.author, pct(b.percentage), b.device].filter(Boolean).join(' · ')}
+                {[b.author, pct(b.percentage), deviceLabel(b)].filter(Boolean).join(' · ')}
               </p>
             </div>
             {busy === b.document ? (
@@ -768,7 +775,7 @@ export default function Book({ session, book, books, activity, back = { href: '#
                 </p>
               )}
               <p className="mt-3 font-mono text-xs text-stone-500">
-                <span className="font-semibold text-brand-600">{pct(book.percentage)}</span> · {book.device || book.device_id} · {ago(book.timestamp)}
+                <span className="font-semibold text-brand-600">{pct(book.percentage)}</span> · <span title={book.device_id}>{deviceLabel(book)}</span> · {ago(book.timestamp)}
               </p>
               <ProgressBar value={book.percentage} className="mt-2" />
               {wide && <Stats session={session} doc={book.document} aliases={book.aliases} activity={activity} wide />}

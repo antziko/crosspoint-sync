@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DOC, makeTestApp, registerUser } from './helpers.js';
 import { historyFromBlob } from '../src/compat/projection.js';
+import { stripDeviceTag } from '../src/routes/kosync.js';
 
 function bookmarkBlob(marks: Record<string, unknown>[], tombs: Record<string, unknown>[] = []): string {
   return JSON.stringify({ b: marks, t: tombs });
@@ -204,6 +205,41 @@ describe('koreader-sync-server compat', () => {
     expect((await get()).metadata_wanted).toBe(true);
     await put({ title: 'A Tale of Two Cities', filename: 'tale.epub' });
     expect((await get()).metadata_wanted).toBeUndefined();
+  });
+});
+
+describe('device copy tag', () => {
+  it('shows every copy of a book under one name', () => {
+    for (const name of ['(X3) Dune - Herbert.epub', '(x4) Dune - Herbert.epub', 'Dune - Herbert (X4).epub', 'Dune - Herbert.epub']) {
+      expect(stripDeviceTag(name)).toBe('Dune - Herbert.epub');
+    }
+    expect(stripDeviceTag('Herbert - (X4) Dune.epub')).toBe('Herbert - Dune.epub');
+    expect(stripDeviceTag('(X3) Dune')).toBe('Dune');
+    expect(stripDeviceTag('Dune (x3)')).toBe('Dune');
+    expect(stripDeviceTag('Vol. 2 (X4)')).toBe('Vol. 2');
+    expect(stripDeviceTag('(X5) Dune')).toBe('(X5) Dune');
+    expect(stripDeviceTag('(X4)')).toBe('(X4)');
+  });
+
+  it('stores the name without the tag and cleans names already stored', async () => {
+    const { migrate } = await import('../src/db/db.js');
+    const { app, db } = makeTestApp();
+    const { headers } = await registerUser(app);
+    await app.request('/syncs/progress', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        document: DOC, progress: '/body/p[1]', percentage: 0.3, device: 'CrossPoint', device_id: 'cp-1',
+        metadata: { title: '(X4) Dune', filename: '(x4) Dune - Herbert.epub' },
+      }),
+    });
+    const row = () => db.prepare('SELECT title, filename FROM documents WHERE document = ?').get(DOC);
+    expect(row()).toEqual({ title: 'Dune', filename: 'Dune - Herbert.epub' });
+
+    db.prepare('UPDATE documents SET title = ?, filename = ? WHERE document = ?').run('Dune (X3)', 'Dune - Herbert (X3).epub', DOC);
+    db.prepare("DELETE FROM migrations WHERE name LIKE '9002%'").run();
+    migrate(db);
+    expect(row()).toEqual({ title: 'Dune', filename: 'Dune - Herbert.epub' });
   });
 });
 
