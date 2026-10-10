@@ -44,9 +44,11 @@ export async function importFromRedis(db: DB, redis: RedisReader, dryRun = false
       continue;
     }
     let row = getUser.get(username) as { id: number } | undefined;
-    if (!row && !dryRun) {
-      addUser.run(username, hashKey(md5Key.toLowerCase()), now);
-      row = getUser.get(username) as { id: number };
+    if (!row) {
+      if (!dryRun) {
+        addUser.run(username, hashKey(md5Key.toLowerCase()), now);
+        row = getUser.get(username) as { id: number };
+      }
       report.users++;
     }
     userIds.set(username, row?.id ?? -1);
@@ -228,6 +230,10 @@ export class RespClient implements RedisReader {
       default:
         return { value: new Error(`unexpected RESP reply: ${line}`), end: next };
     }
+  }
+
+  async select(index: number): Promise<void> {
+    await this.command('SELECT', String(index));
   }
 
   async keys(pattern: string): Promise<string[]> {
