@@ -221,6 +221,16 @@ describe('device copy tag', () => {
     expect(stripDeviceTag('(X4)')).toBe('(X4)');
   });
 
+  it('strips the single optimized copy tag "(x)"', () => {
+    for (const name of ['(x) Dune - Herbert.epub', '(X) Dune - Herbert.epub', 'Dune - Herbert (x).epub']) {
+      expect(stripDeviceTag(name)).toBe('Dune - Herbert.epub');
+    }
+    expect(stripDeviceTag('Herbert - (x) Dune.epub')).toBe('Herbert - Dune.epub');
+    expect(stripDeviceTag('(x)tra Dune')).toBe('(x)tra Dune');
+    expect(stripDeviceTag('(y) Dune')).toBe('(y) Dune');
+    expect(stripDeviceTag('(x)')).toBe('(x)');
+  });
+
   it('stores the name without the tag and cleans names already stored', async () => {
     const { migrate } = await import('../src/db/db.js');
     const { app, db } = makeTestApp();
@@ -240,6 +250,19 @@ describe('device copy tag', () => {
     db.prepare("DELETE FROM migrations WHERE name LIKE '9002%'").run();
     migrate(db);
     expect(row()).toEqual({ title: 'Dune', filename: 'Dune - Herbert.epub' });
+
+    const cases: [string, string, string, string][] = [
+      ['(x) Dune', '(x) Dune - Herbert.epub', 'Dune', 'Dune - Herbert.epub'],
+      ['Dune (x)', 'Dune - Herbert (x).epub', 'Dune', 'Dune - Herbert.epub'],
+      ['Herbert - (X) Dune', 'Herbert - (x) Dune.pdf', 'Herbert - Dune', 'Herbert - Dune.pdf'],
+      ['(x)tra', 'Dune (x).fb2.zip', '(x)tra', 'Dune (x).fb2.zip'],
+    ];
+    for (const [title, filename, wantTitle, wantFilename] of cases) {
+      db.prepare('UPDATE documents SET title = ?, filename = ? WHERE document = ?').run(title, filename, DOC);
+      db.prepare("DELETE FROM migrations WHERE name LIKE '9003%'").run();
+      migrate(db);
+      expect(row()).toEqual({ title: wantTitle, filename: wantFilename });
+    }
   });
 });
 
